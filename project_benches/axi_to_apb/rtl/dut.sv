@@ -59,7 +59,8 @@ module AXI_to_APB_Bridge_DUT
     typedef enum logic [1:0] {
         AW_IDLE     = 2'b00,
         AW_VALID    = 2'b01,
-        AW_READY = 2'b10
+        AW_READY    = 2'b10,
+        AW_SAMPLE   = 2'b11
     } addr_state_t;
 
     addr_state_t aw_current_state, aw_next_state;
@@ -104,8 +105,111 @@ module AXI_to_APB_Bridge_DUT
 
 
     //Buffers to store address and data transactions
+    //Planning a ROB like structure for storing the address and data transactions
     addr_t Address_trans_buffer [outstandin_transactions - 1:0];
+    logic [7:0] address_read_pointer, address_write_pointer;  //For now assuming max 8 bits => 2**8 entries
+    logic address_read_phase_bit, address_write_phase_bit;
     axi_tran_t axi_trans_buffer [outstandin_transactions - 1:0];
+    logic axi_read_pointer, axi_write_pointer;
+    logic axi_read_phase_bit, axi_write_phase_bit;
+
+    
+
+    //Functions to manage the FIFOs
+    function address_fifo_full;
+        if(address_read_phase_bit != address_write_phase_bit && address_read_pointer == address_write_pointer)
+            address_fifo_full = 1'b1;
+        else
+            address_fifo_full = 1'b0;
+    endfunction
+
+    function address_fifo_empty;
+        if(address_read_phase_bit == address_write_phase_bit || address_read_pointer == address_write_pointer)
+            address_fifo_empty = 1'b1;
+        else
+            address_fifo_empty = 1'b0;
+    endfunction
+
+
+    function axi_fifo_full;
+        if(axi_read_phase_bit != axi_write_phase_bit && axi_read_pointer == axi_write_pointer)
+            axi_fifo_full = 1'b1;
+        else
+            axi_fifo_full = 1'b0;
+    endfunction
+
+    function axi_fifo_empty;
+        if(axi_read_phase_bit == axi_write_phase_bit || axi_read_pointer == axi_write_pointer)
+            axi_fifo_empty = 1'b1;
+        else
+            axi_fifo_empty = 1'b0;  
+    endfunction
+
+
+
+    //Synchronous block to update the states with syynchronous reset
+    always@(posedge clk) begin
+        if(!reset_n)
+            begin
+                aw_current_state <= AW_IDLE;
+                w_current_state <= W_IDLE;
+                b_current_state <= B_IDLE;
+                ar_current_state <= AR_IDLE;
+                r_current_state <= R_IDLE;
+
+                //reset the pointers
+                address_read_pointer <= 8'b0;
+                address_write_pointer <= 8'b0;
+                address_read_phase_bit <= 1'b0; 
+                address_write_phase_bit <= 1'b0;
+                axi_read_pointer <= 8'b0;
+                axi_write_pointer <= 8'b0;
+                axi_read_phase_bit <= 1'b0;
+                axi_write_phase_bit <= 1'b0;
+
+            end
+        else
+            begin
+                aw_current_state <= aw_next_state;
+                w_current_state <= w_next_state;
+                b_current_state <= b_next_state;
+                ar_current_state <= ar_next_state;
+                r_current_state <= r_next_state;
+            end
+    end
+
+
+    always_comb begin
+
+        //AW Channel State Machine
+        case(aw_current_state)
+            AW_IDLE: begin
+                awready = 1'b0;
+                if(awvalid)
+                    aw_next_state = AW_VALID;
+                else
+                    aw_next_state = AW_IDLE;
+            end
+
+            AW_VALID: begin
+                //check if we are ready to sample the address
+                //Add FIFO check
+
+            end
+            AW_READY: begin
+                awready = 1'b1;
+                aw_next_state = AW_SAMPLE;
+            end
+
+            AW_SAMPLE: begin
+                //Sample the address and store in in the buffer
+                //Add support for multiple/burst transactions later
+
+            end
+
+        endcase
+
+    end
 
 
 endmodule
