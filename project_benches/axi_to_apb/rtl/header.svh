@@ -17,4 +17,14 @@ package AXI_to_APB;
         bit last_flag;                    //Flag to indicate the last data transfer       
     }axi_tran_t;
 
+    typedef struct packed{
+        bit [ADDRESS_WIDTH - 1:0] paddr;                 //APB Address
+        bit [DATA_WIDTH - 1:0] pwdata;                //APB Write Data
+        bit read_write_flag;              //Flag to indicate read or write operation
+        bit [3:0] transaction_id;          
+        bit psel;                        //APB Select Signal
+        bit penable;                     //APB Enable Signal
+        bit pwrite;                      //APB Write Signal
+    }apb_tran_t;
+
 endpackage

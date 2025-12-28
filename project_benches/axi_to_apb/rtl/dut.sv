@@ -60,6 +60,7 @@ module AXI_to_APB_Bridge_DUT
 
     import AXI_to_APB::*;
 
+
     //Address channel state machine states
     typedef enum logic [1:0] {
         AW_IDLE     = 2'b00,
@@ -395,6 +396,166 @@ module AXI_to_APB_Bridge_DUT
 
     end
 
+
+    //APB PART
+    //Generating clock
+    assign pclk = clk;   //Clock is provided from the testbench
+    assign preset_n = reset_n; //Active low reset
+
+
+    typedef enum logic [1:0] {
+        APB_IDLE     = 2'b00,     //Find transactions fromt the buffers
+        APB_ADDR     = 2'b01,     //Get the address using the transaction id from the adddr buffer
+        APB_SETUP    = 2'b10,
+        APB_ACCESS   = 2'b11
+    } apb_state_t;
+
+    apb_state_t apb_current_state, apb_next_state;
+
+    //Synchronous block to update the states with syynchronous reset
+    always@(posedge pclk) begin
+        if(!preset_n)
+            begin
+                apb_current_state <= APB_IDLE;
+            end
+        else
+            begin
+                apb_current_state <= apb_next_state;
+            end
+    end
+
+    apb_tran_t current_apb_transaction;
+    axi_tran_t current_axi_transaction;
+    addr_t current_address_transaction;
+
+    logic [31:0] count_wait_cycles;
+    always_comb begin
+        //APB State Machine
+        case(apb_current_state)
+            APB_IDLE: begin
+                penable = 1'b0;
+                psel = 3'b000;      //One hot encoding
+                paddr = 32'bx;
+                pwdata = 32'bx;
+                pwrite = 1'bx;
+                count_wait_cycles = 0;
+                if(!axi_fifo_empty()) begin
+                    //consume the axi transaction first
+                    current_axi_transaction = axi_trans_buffer[axi_read_pointer++];
+                    if (axi_read_pointer == outstandin_transactions) begin
+                        axi_read_pointer = 8'b0;
+                        axi_read_phase_bit = ~axi_read_phase_bit;
+                    end 
+
+                    //populate the apb transaction
+                    current_apb_transaction.pwdata = current_axi_transaction.wdata;
+                    current_apb_transaction.read_write_flag = current_axi_transaction.read_write_flag;
+                    current_apb_transaction.transaction_id = current_axi_transaction.transaction_id; 
+
+                    apb_next_state = APB_ADDR; 
+                end
+                else 
+                    apb_next_state = APB_IDLE;
+            end
+
+            APB_ADDR: begin
+                //Get the address using the transaction id from the adddr buffer
+                if(address_fifo_empty()) begin
+                    if(count_wait_cycles < 32'd100) begin
+                        count_wait_cycles = count_wait_cycles + 1;
+                        apb_next_state = APB_ADDR;
+                    end
+                    else begin
+                        //Timeout condition, go back to IDLE
+                        apb_next_state = APB_IDLE;
+                    end
+                end
+                else begin
+                    current_address_transaction = Address_trans_buffer[address_read_pointer++];
+                    if (address_read_pointer == outstandin_transactions) begin
+                        address_read_pointer = 8'b0;
+                        address_read_phase_bit = ~address_read_phase_bit;
+                    end
+                    //populate the apb transaction
+                    current_apb_transaction.paddr = current_address_transaction.awaddr; //Assuming write operation
+
+                    apb_next_state = APB_SETUP;
+                end
+            end
+            APB_SETUP: begin
+                //Setup phase
+                paddr = current_apb_transaction.paddr;
+                pwrite = current_apb_transaction.read_write_flag;
+                if(current_apb_transaction.read_write_flag) begin
+                    //Write operation
+                    pwdata = current_apb_transaction.pwdata;
+                end
+                else begin
+                    //Read operation
+                    pwdata = 32'bx;
+                end
+
+                psel = 3'b001;      //Select slave 0 for now
+                penable = 1'b0;
+                apb_next_state = APB_ACCESS;
+            end
+
+            APB_ACCESS: begin
+                //Access phase
+                penable = 1'b1;
+                if(pready) begin
+                    //Transaction complete
+                    apb_next_state = APB_IDLE;
+
+                    //FIXME: Still confused about wlast and rlast handling
+                    //FIXME: what about the case where the master is not ready? i.e rready or bready is low
+
+                    //for read operation
+                    if(!current_apb_transaction.read_write_flag) begin
+                        //populate the read data to R channel
+                        rdata = prdata;
+                        rresp = pslverr ? 2'b10 : 2'b00; //SLVERR or OKAY
+                        rvalid = 1'b1;
+                        r_transaction_id = current_apb_transaction.transaction_id;
+
+                        bresp = 2'bx;
+                        bvalid = 1'b0;
+                        b_transaction_id = 4'bx;
+                    end
+                    else begin
+                        //for write operation
+                        rdata = 32'bx;
+                        rresp = 2'bx;
+                        rvalid = 1'b0;
+                        r_transaction_id = 4'bx;
+
+                        //populate the write response to B channel
+                        bresp = pslverr ? 2'b10 : 2'b00; //SLVERR or OKAY
+                        bvalid = 1'b1;
+                        b_transaction_id = current_apb_transaction.transaction_id;
+                        
+
+                        
+                    end
+                end
+                else begin
+                    apb_next_state = APB_ACCESS;
+
+                    //To avoid latches
+                    rdata = 32'bx;
+                    rresp = 2'bx;
+                    rvalid = 1'b0;
+                    bresp = 2'bx;
+                    bvalid = 1'b0;
+                    b_transaction_id = 4'bx;
+                end
+            end
+
+        endcase
+                    
+    end
+
+                    
 
 endmodule
 
