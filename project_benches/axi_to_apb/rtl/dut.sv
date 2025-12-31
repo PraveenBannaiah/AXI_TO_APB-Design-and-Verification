@@ -2,7 +2,7 @@
 //Design of AXI to APB Bridge DUT
 
 module AXI_to_APB_Bridge_DUT 
-    #(parameter bit[31:0] ADDR_WIDTH = 32, parameter bit[31:0] DATA_WIDTH = 32, 
+    #(parameter bit[7:0] ADDR_WIDTH = 32, parameter bit[7:0] DATA_WIDTH = 32, 
       parameter bit[3:0] outstandin_transactions = 16) 
     (
     input logic clk,
@@ -10,13 +10,13 @@ module AXI_to_APB_Bridge_DUT
 
     //AXI
     //AW Channel
-    input logic [ADDR_WIDTH:0] awaddr,
+    input logic [ADDR_WIDTH -1:0] awaddr,
     input logic awvalid,
     output logic awready,
     input logic [3:0] aw_transaction_id,
     
     //W Channel
-    input logic [ADDR_WIDTH:0] wdata,
+    input logic [ADDR_WIDTH-1:0] wdata,
     input logic wvalid,
     input logic [3:0] w_transaction_id,
     output logic wready,
@@ -29,7 +29,7 @@ module AXI_to_APB_Bridge_DUT
     output logic [3:0] b_transaction_id,
 
     //AR Channel
-    input logic [DATA_WIDTH:0] araddr,
+    input logic [DATA_WIDTH-1:0] araddr,
     input logic arvalid,
     input logic [3:0] ar_transaction_id,
     output logic arready,
@@ -38,7 +38,7 @@ module AXI_to_APB_Bridge_DUT
     input logic rready,
     output logic [3:0] r_transaction_id,
     output logic rvalid,
-    output logic [DATA_WIDTH:0] rdata,
+    output logic [DATA_WIDTH-1:0] rdata,
     output logic [1:0] rresp,     //00: OKAY, 01: EXOKAY, 10: SLVERR, 11: DECERR
     output logic rlast,
 
@@ -49,9 +49,9 @@ module AXI_to_APB_Bridge_DUT
     output logic preset_n,
     output logic penable,
     output logic pwrite,
-    output logic [ADDR_WIDTH:0] paddr,
-    output logic [DATA_WIDTH:0] pwdata,
-    input logic [DATA_WIDTH:0] prdata,
+    output logic [ADDR_WIDTH-1:0] paddr,
+    output logic [DATA_WIDTH-1:0] pwdata,
+    input logic [DATA_WIDTH-1:0] prdata,
     output logic [2:0] psel,       //8 slave devices
     input logic pready,
     input logic pslverr
