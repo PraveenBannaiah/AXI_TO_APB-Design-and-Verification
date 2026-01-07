@@ -57,6 +57,43 @@
 
         endtask: drive_wdata_transaction
 
+        task drive_raddr_transaction(axi_transaction trans):
+            // Drive AXI Read Address Channel
+            if(trans.araddr != 'x) begin
+                @(posedge bus.clk);
+                bus.araddr <= trans.araddr;
+                bus.arvalid <= 1'b1;
+                while(bus.arread !== 1'b1) begin
+                    @(posedge bus.clk);
+                end
+                @(posedge bus.clk);
+                bus.arvalid <= 1'b0;
+            end
+        endtask: drive_raddr_transaction
+
+        task drive_rdata_transaction(axi_transaction trans);
+            // Drive AXI Read Data Channel
+            
+            //Write an assertion to check if arready is high before reading data
+
+            while(bus.rlast !==1'b1) begin
+                @(posedge bus.clk);
+
+                if(bus.rvalid === 1'b1) begin
+                    //Capture read data
+                    $display("Read Data: %h", bus.rdata);
+                    //Add more logic here to store or process read data as needed
+                end
+            end
+
+            //Capture the last data beat
+            if(bus.rvalid === 1'b1) begin
+                $display("Read Data (Last Beat): %h", bus.rdata);
+            end
+
+        endtask: drive_rdata_transaction
+
+
     endinterface : axi_driver_bfm
 
 `endif
